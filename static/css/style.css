@@ -1746,3 +1746,57 @@ html, body {
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.25);
 }
+
+
+/* Cloud / Browser Camera Prompt Overlay */
+.cloud-cam-prompt {
+  display: flex;
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, rgba(14, 20, 32, 0.94), rgba(4, 7, 14, 0.98));
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
+  z-index: 10;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.cloud-cam-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  max-width: 380px;
+}
+
+.cloud-cam-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: rgba(0, 240, 255, 0.12);
+  border: 1.5px solid rgba(0, 240, 255, 0.4);
+  color: #00f0ff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 20px rgba(0, 240, 255, 0.2);
+}
+
+.cloud-cam-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #f1f5f9;
+  letter-spacing: 0.02em;
+  margin: 0;
+}
+
+.cloud-cam-desc {
+  font-size: 0.84rem;
+  color: #94a3b8;
+  line-height: 1.5;
+  margin: 0;
+}

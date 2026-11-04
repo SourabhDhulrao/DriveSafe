@@ -42,6 +42,16 @@ class CameraController {
         this.toggleCamera(true);
       });
     }
+    const btnStartBrowser = document.getElementById('btn-start-browser-cam');
+    if (btnStartBrowser) {
+      btnStartBrowser.addEventListener('click', () => {
+        const prompt = document.getElementById('cloud-camera-prompt');
+        if (prompt) prompt.style.display = 'none';
+        const sourceSelect = document.getElementById('camera-source-select');
+        if (sourceSelect) sourceSelect.value = 'browser';
+        this.setMode('browser');
+      });
+    }
   }
 
   syncInitialState() {
@@ -52,6 +62,18 @@ class CameraController {
         if (typeof data.camera_enabled === 'boolean') {
           this.isCameraOn = data.camera_enabled;
           this.updateCameraUI();
+        }
+        this.cameraAvailable = data.camera_available;
+        const isRemote = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+        if (data.camera_available === false || isRemote) {
+          const prompt = document.getElementById('cloud-camera-prompt');
+          if (prompt && this.mode === 'server') {
+            prompt.style.display = 'flex';
+          }
+          const sourceSelect = document.getElementById('camera-source-select');
+          if (sourceSelect) {
+            sourceSelect.value = 'browser';
+          }
         }
       })
       .catch(() => {});
@@ -139,6 +161,10 @@ class CameraController {
   }
 
   setMode(mode) {
+    const prompt = document.getElementById('cloud-camera-prompt');
+    if (prompt) {
+      prompt.style.display = (mode === 'server' && this.cameraAvailable === false) ? 'flex' : 'none';
+    }
     if (this.mode === mode) return;
 
     this.stopCurrentMode();
