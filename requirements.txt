@@ -3,3 +3,4 @@ mediapipe>=1.1.0
 flask>=3.1.0
 numpy>=2.0.0
 scikit-learn>=1.5.0
+
