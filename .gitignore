@@ -1,0 +1,25 @@
+# Python Bytecode & Cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# SQLite Database & Runtime Journals
+*.db
+*.db-journal
+
+# Virtual Environments
+venv/
+env/
+ENV/
+.env
+
+# IDE / Editor Files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS Generated
+.DS_Store
+Thumbs.db
