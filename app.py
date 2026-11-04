@@ -77,7 +77,7 @@ def process_frame_api():
         return_annotated = data.get("return_annotated", False)
         annotated_b64 = None
         if return_annotated:
-            ret, buf = cv2.imencode(".jpg", annotated_frame, [cv2.IMWRITE_JPEG_QUALITY, 75])
+            ret, buf = cv2.imencode(".jpg", annotated_frame, [cv2.IMWRITE_JPEG_QUALITY, 65])
             if ret:
                 annotated_b64 = "data:image/jpeg;base64," + base64.b64encode(buf).decode("utf-8")
 

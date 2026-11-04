@@ -92,15 +92,14 @@ class FaceLandmarkDetector:
 
     def _init_detector(self):
         base_options = python.BaseOptions(model_asset_path=self.model_path)
-        # 0.55 confidence gating ensures night-time faces with deep shadow gradients
-        # are not prematurely discarded, while temporal smoothing keeps tracking rock-solid.
+        # RunningMode.IMAGE provides instantaneous, stateless detection without
+        # network timestamp drift, frame-drop desync, or Kalman velocity errors.
         options = vision.FaceLandmarkerOptions(
             base_options=base_options,
-            running_mode=vision.RunningMode.VIDEO,
+            running_mode=vision.RunningMode.IMAGE,
             num_faces=1,
-            min_face_detection_confidence=NIGHT_MIN_DETECTION_CONFIDENCE,
-            min_face_presence_confidence=NIGHT_MIN_DETECTION_CONFIDENCE,
-            min_tracking_confidence=NIGHT_MIN_TRACKING_CONFIDENCE,
+            min_face_detection_confidence=0.45,
+            min_face_presence_confidence=0.45,
         )
         self.detector = vision.FaceLandmarker.create_from_options(options)
 
@@ -279,10 +278,7 @@ class FaceLandmarkDetector:
         rgb_frame = cv2.cvtColor(enhanced, cv2.COLOR_BGR2RGB)
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
 
-        self._frame_timestamp_ms += 33
-        detection_result = self.detector.detect_for_video(
-            mp_image, self._frame_timestamp_ms
-        )
+        detection_result = self.detector.detect(mp_image)
 
         # Secondary low-light rescue pass for extreme darkness / rural night driving
         if (
@@ -293,10 +289,7 @@ class FaceLandmarkDetector:
             rescue_rgb = cv2.cvtColor(rescue_bgr, cv2.COLOR_BGR2RGB)
             rescue_mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rescue_rgb)
 
-            self._frame_timestamp_ms += 10
-            detection_result = self.detector.detect_for_video(
-                rescue_mp_image, self._frame_timestamp_ms
-            )
+            detection_result = self.detector.detect(rescue_mp_image)
             if detection_result.face_landmarks and len(detection_result.face_landmarks) > 0:
                 self.enhanced_frame = rescue_bgr
 

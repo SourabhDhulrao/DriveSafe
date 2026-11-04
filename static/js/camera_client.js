@@ -14,6 +14,10 @@ class CameraController {
     this.serverImgEl = document.getElementById('webcam-feed');
     this.captureInterval = null;
     this.isProcessing = false;
+    this.offscreenCanvas = document.createElement('canvas');
+    this.offscreenCtx = this.offscreenCanvas.getContext('2d');
+    this.browserLoopActive = false;
+    this.browserLoopTimeout = null;
 
     // UI Elements for Camera On/Off
     this.btnToggle = document.getElementById('btn-toggle-camera');
@@ -197,6 +201,11 @@ class CameraController {
   }
 
   _stopBrowserStream() {
+    this.browserLoopActive = false;
+    if (this.browserLoopTimeout) {
+      clearTimeout(this.browserLoopTimeout);
+      this.browserLoopTimeout = null;
+    }
     if (this.captureInterval) {
       clearInterval(this.captureInterval);
       this.captureInterval = null;
@@ -224,55 +233,96 @@ class CameraController {
   async startBrowserWebcam() {
     try {
       this.mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { max: 30 } },
+        video: {
+          facingMode: 'user',
+          width: { ideal: 640 },
+          height: { ideal: 480 }
+        },
         audio: false
       });
       this.videoEl.srcObject = this.mediaStream;
       await this.videoEl.play();
 
+      // Wait until video has valid dimensions so face is never distorted
+      if (!this.videoEl.videoWidth || !this.videoEl.videoHeight) {
+        await new Promise((resolve) => {
+          this.videoEl.onloadedmetadata = () => resolve();
+          setTimeout(resolve, 350);
+        });
+      }
+
+      const vw = this.videoEl.videoWidth || 640;
+      const vh = this.videoEl.videoHeight || 480;
+
+      // Capture at optimized 480px width (cuts network payload by 75% for zero-lag upload)
+      const capW = 480;
+      const capH = Math.round((vh / vw) * capW);
+      this.offscreenCanvas.width = capW;
+      this.offscreenCanvas.height = capH;
+
+      // Ensure visible canvas is ready
       const ctx = this.canvasEl.getContext('2d');
       this.canvasEl.width = 640;
       this.canvasEl.height = 480;
 
-      // Frame dispatch loop (~18 FPS)
-      this.captureInterval = setInterval(() => {
-        if (this.isProcessing || !this.isCameraOn) return;
-        this.isProcessing = true;
+      this.browserLoopActive = true;
+      this.isProcessing = false;
 
-        // Draw mirror video frame to canvas
-        ctx.save();
-        ctx.scale(-1, 1);
-        ctx.drawImage(this.videoEl, -640, 0, 640, 480);
-        ctx.restore();
+      const prompt = document.getElementById('cloud-camera-prompt');
+      if (prompt) prompt.style.display = 'none';
 
-        const base64Data = this.canvasEl.toDataURL('image/jpeg', 0.65);
+      // Non-blocking adaptive dispatch loop (eliminates blinking, queues, and hanging)
+      const dispatchFrame = async () => {
+        if (!this.browserLoopActive || !this.isCameraOn || this.mode !== 'browser') {
+          return;
+        }
 
-        fetch('/api/process_frame', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ image: base64Data, return_annotated: true })
-        })
-          .then(res => res.json())
-          .then(data => {
+        try {
+          // Draw to OFFSCREEN in-memory canvas ONLY (never draws raw video on screen -> ZERO FLICKER!)
+          this.offscreenCtx.save();
+          this.offscreenCtx.scale(-1, 1);
+          this.offscreenCtx.drawImage(this.videoEl, -capW, 0, capW, capH);
+          this.offscreenCtx.restore();
+
+          const base64Data = this.offscreenCanvas.toDataURL('image/jpeg', 0.60);
+
+          const response = await fetch('/api/process_frame', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image: base64Data, return_annotated: true })
+          });
+
+          if (response.ok) {
+            const data = await response.json();
             if (data.success && data.annotated_frame) {
               const img = new Image();
               img.onload = () => {
-                ctx.drawImage(img, 0, 0, 640, 480);
+                if (this.browserLoopActive && this.mode === 'browser') {
+                  // Direct double-buffered paint to visible canvas: crisp, smooth, 0 flicker
+                  ctx.drawImage(img, 0, 0, 640, 480);
+                }
               };
               img.src = data.annotated_frame;
             }
             if (data.telemetry && this.onTelemetry) {
               this.onTelemetry(data.telemetry);
             }
-          })
-          .catch(err => console.warn('Frame processing error:', err))
-          .finally(() => {
-            this.isProcessing = false;
-          });
-      }, 55);
+          }
+        } catch (err) {
+          console.warn('Frame processing dispatch error:', err);
+        }
+
+        // Schedule next frame with a gentle 45ms pacing (clean 12-15 FPS without network backlog)
+        if (this.browserLoopActive && this.isCameraOn && this.mode === 'browser') {
+          this.browserLoopTimeout = setTimeout(dispatchFrame, 45);
+        }
+      };
+
+      dispatchFrame();
+
     } catch (err) {
-      alert('Unable to access browser camera: ' + err.message + '\nSwitching back to server feed.');
-      this.setMode('server');
+      console.error('Browser webcam error:', err);
+      alert('Unable to access camera: ' + err.message + '\nPlease ensure camera permissions are allowed in your browser.');
     }
   }
 
