@@ -231,15 +231,24 @@ class CameraController {
   }
 
   async startBrowserWebcam() {
+    this._stopBrowserStream();
     try {
-      this.mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: 'user',
-          width: { ideal: 640 },
-          height: { ideal: 480 }
-        },
-        audio: false
-      });
+      try {
+        this.mediaStream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: 'user',
+            width: { ideal: 640 },
+            height: { ideal: 480 }
+          },
+          audio: false
+        });
+      } catch (constraintErr) {
+        // Fallback to standard video stream if exact resolution is occupied
+        this.mediaStream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false
+        });
+      }
       this.videoEl.srcObject = this.mediaStream;
       await this.videoEl.play();
 
@@ -322,7 +331,13 @@ class CameraController {
 
     } catch (err) {
       console.error('Browser webcam error:', err);
-      alert('Unable to access camera: ' + err.message + '\nPlease ensure camera permissions are allowed in your browser.');
+      let msg = 'Unable to access camera: ' + err.message;
+      if (err.name === 'NotReadableError' || (err.message && err.message.toLowerCase().includes('in use'))) {
+        msg = '📷 Camera Hardware Locked: Another app is currently using your webcam (such as Zoom, Microsoft Teams, Skype, or another browser tab).\n\nPlease close Zoom or other apps using your camera, then click "Connect Device Camera" again.';
+      } else if (err.name === 'NotAllowedError') {
+        msg = 'Camera permission was denied.\n\nPlease click the lock or camera icon in your browser address bar and choose "Allow".';
+      }
+      alert(msg);
     }
   }
 
