@@ -60,6 +60,7 @@ class DriveSafePipeline:
 
         # Latest telemetry snapshot
         self.latest_telemetry = self._get_initial_telemetry()
+        self.latest_landmarks_summary = None
 
         # Visual preferences
         self.show_hud_overlay = True
@@ -174,14 +175,29 @@ class DriveSafePipeline:
         face_detected, landmarks_dict, confidence = self.detector.process_frame(frame_bgr)
 
         # 2. Extract Biometric Features
+        landmarks_summary = None
         if face_detected and len(landmarks_dict) > 0:
             left_ear, right_ear, avg_ear = calculate_ear(landmarks_dict)
             mar = calculate_mar(landmarks_dict)
             pitch, yaw, roll, nose_2d, nose_endpoint = estimate_head_pose(landmarks_dict, w, h)
+            try:
+                xs = [pt[0] for pt in landmarks_dict.values()]
+                ys = [pt[1] for pt in landmarks_dict.values()]
+                from core.config import LEFT_EYE_CONTOUR, RIGHT_EYE_CONTOUR, MOUTH_OUTLINE
+                landmarks_summary = {
+                    "bbox": [round(min(xs) / w, 4), round(min(ys) / h, 4), round(max(xs) / w, 4), round(max(ys) / h, 4)],
+                    "left_eye": [[round(landmarks_dict[i][0] / w, 4), round(landmarks_dict[i][1] / h, 4)] for i in LEFT_EYE_CONTOUR if i in landmarks_dict],
+                    "right_eye": [[round(landmarks_dict[i][0] / w, 4), round(landmarks_dict[i][1] / h, 4)] for i in RIGHT_EYE_CONTOUR if i in landmarks_dict],
+                    "mouth": [[round(landmarks_dict[i][0] / w, 4), round(landmarks_dict[i][1] / h, 4)] for i in MOUTH_OUTLINE if i in landmarks_dict],
+                    "nose_vector": [round(nose_2d[0] / w, 4), round(nose_2d[1] / h, 4), round(nose_endpoint[0] / w, 4), round(nose_endpoint[1] / h, 4)] if (nose_2d and nose_endpoint and nose_2d != (0, 0)) else None
+                }
+            except Exception:
+                landmarks_summary = None
         else:
             left_ear, right_ear, avg_ear = 0.0, 0.0, 0.0
             mar = 0.0
             pitch, yaw, roll, nose_2d, nose_endpoint = 0.0, 0.0, 0.0, (0, 0), (0, 0)
+        self.latest_landmarks_summary = landmarks_summary
 
         # 3. Handle Auto-Calibration
         prev_blink_count = self.blink_tracker.total_blinks
@@ -435,10 +451,11 @@ class CameraStream:
         Process a frame supplied from client-side webcam (via browser canvas / fetch).
         """
         annotated, telemetry = self.pipeline.process_frame(frame_bgr)
+        summary = self.pipeline.latest_landmarks_summary
         with self.lock:
             self.latest_frame = frame_bgr
             self.latest_annotated = annotated
-        return annotated, telemetry
+        return annotated, telemetry, summary
 
     def get_jpeg_frame(self):
         """Encode the latest annotated frame to JPEG for MJPEG stream."""

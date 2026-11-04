@@ -71,7 +71,7 @@ def process_frame_api():
         if frame_bgr is None:
             return jsonify({"error": "Failed to decode frame"}), 400
 
-        annotated_frame, telemetry = camera_stream.process_external_frame(frame_bgr)
+        annotated_frame, telemetry, landmarks_summary = camera_stream.process_external_frame(frame_bgr)
 
         # Optionally return annotated image if requested
         return_annotated = data.get("return_annotated", False)
@@ -84,6 +84,7 @@ def process_frame_api():
         return jsonify({
             "success": True,
             "telemetry": telemetry,
+            "landmarks": landmarks_summary,
             "annotated_frame": annotated_b64
         })
     except Exception as e:

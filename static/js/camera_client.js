@@ -180,6 +180,7 @@ class CameraController {
     }
 
     if (mode === 'server') {
+      if (this.videoEl) this.videoEl.style.display = 'none';
       this.serverImgEl.style.display = 'block';
       this.canvasEl.style.display = 'none';
       fetch('/api/camera/toggle', {
@@ -191,11 +192,15 @@ class CameraController {
       });
     } else if (mode === 'browser') {
       this.serverImgEl.style.display = 'none';
+      if (this.videoEl) this.videoEl.style.display = 'block';
       this.canvasEl.style.display = 'block';
+      this.canvasEl.style.position = 'absolute';
       this.startBrowserWebcam();
     } else if (mode === 'simulation') {
+      if (this.videoEl) this.videoEl.style.display = 'none';
       this.serverImgEl.style.display = 'none';
       this.canvasEl.style.display = 'block';
+      this.canvasEl.style.position = 'static';
       this.startSimulation();
     }
   }
@@ -298,20 +303,14 @@ class CameraController {
           const response = await fetch('/api/process_frame', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ image: base64Data, return_annotated: true })
+            body: JSON.stringify({ image: base64Data, return_annotated: false })
           });
 
           if (response.ok) {
             const data = await response.json();
-            if (data.success && data.annotated_frame) {
-              const img = new Image();
-              img.onload = () => {
-                if (this.browserLoopActive && this.mode === 'browser') {
-                  // Direct double-buffered paint to visible canvas: crisp, smooth, 0 flicker
-                  ctx.drawImage(img, 0, 0, 640, 480);
-                }
-              };
-              img.src = data.annotated_frame;
+            if (data.success) {
+              // Real-time HUD layer rendered directly over native 60fps video
+              this.drawHudOverlay(data.landmarks, data.telemetry);
             }
             if (data.telemetry && this.onTelemetry) {
               this.onTelemetry(data.telemetry);
@@ -338,6 +337,121 @@ class CameraController {
         msg = 'Camera permission was denied.\n\nPlease click the lock or camera icon in your browser address bar and choose "Allow".';
       }
       alert(msg);
+    }
+  }
+
+    drawHudOverlay(summary, telemetry) {
+    const ctx = this.canvasEl.getContext('2d');
+    const cw = this.canvasEl.width;
+    const ch = this.canvasEl.height;
+
+    // Clear transparent overlay
+    ctx.clearRect(0, 0, cw, ch);
+
+    if (!summary || !summary.bbox) {
+      // Draw subtle searching target box
+      const cx = cw / 2;
+      const cy = ch / 2;
+      ctx.strokeStyle = 'rgba(0, 240, 255, 0.4)';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(cx - 70, cy - 70, 140, 140);
+      ctx.fillStyle = 'rgba(0, 240, 255, 0.7)';
+      ctx.font = '11px "JetBrains Mono", monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('SCANNING FOR FACE...', cx, cy - 80);
+      return;
+    }
+
+    const isClosed = telemetry ? telemetry.is_closed : false;
+    const isYawning = telemetry ? telemetry.is_yawning : false;
+    const isNodding = telemetry ? telemetry.is_nodding : false;
+
+    // 1. Draw Corner HUD brackets around face area
+    const [x1, y1, x2, y2] = summary.bbox;
+    const bx1 = (1 - x2) * cw;
+    const bx2 = (1 - x1) * cw;
+    const by1 = y1 * ch;
+    const by2 = y2 * ch;
+    const bw = bx2 - bx1;
+    const bh = by2 - by1;
+
+    const bracketLen = Math.min(22, Math.max(12, bw * 0.22));
+    ctx.strokeStyle = isClosed ? '#ef4444' : '#00f0ff';
+    ctx.lineWidth = 2;
+
+    // Top-Left
+    ctx.beginPath();
+    ctx.moveTo(bx1, by1 + bracketLen);
+    ctx.lineTo(bx1, by1);
+    ctx.lineTo(bx1 + bracketLen, by1);
+    ctx.stroke();
+
+    // Top-Right
+    ctx.beginPath();
+    ctx.moveTo(bx2 - bracketLen, by1);
+    ctx.lineTo(bx2, by1);
+    ctx.lineTo(bx2, by1 + bracketLen);
+    ctx.stroke();
+
+    // Bottom-Left
+    ctx.beginPath();
+    ctx.moveTo(bx1, by2 - bracketLen);
+    ctx.lineTo(bx1, by2);
+    ctx.lineTo(bx1 + bracketLen, by2);
+    ctx.stroke();
+
+    // Bottom-Right
+    ctx.beginPath();
+    ctx.moveTo(bx2 - bracketLen, by2);
+    ctx.lineTo(bx2, by2);
+    ctx.lineTo(bx2, by2 - bracketLen);
+    ctx.stroke();
+
+    // 2. Draw Eye Contours
+    const eyeColor = isClosed ? '#ef4444' : '#38bdf8';
+    ctx.strokeStyle = eyeColor;
+    ctx.lineWidth = isClosed ? 2.5 : 1.5;
+
+    const drawContour = (pts) => {
+      if (!pts || pts.length < 2) return;
+      ctx.beginPath();
+      ctx.moveTo((1 - pts[0][0]) * cw, pts[0][1] * ch);
+      for (let i = 1; i < pts.length; i++) {
+        ctx.lineTo((1 - pts[i][0]) * cw, pts[i][1] * ch);
+      }
+      ctx.closePath();
+      ctx.stroke();
+    };
+
+    drawContour(summary.left_eye);
+    drawContour(summary.right_eye);
+
+    // 3. Draw Mouth
+    if (summary.mouth) {
+      ctx.strokeStyle = isYawning ? '#f59e0b' : '#10b981';
+      ctx.lineWidth = isYawning ? 2.5 : 1.5;
+      drawContour(summary.mouth);
+    }
+
+    // 4. Draw 3D Nose Pose Direction Vector
+    if (summary.nose_vector) {
+      const [nx1, ny1, nx2, ny2] = summary.nose_vector;
+      const sx = (1 - nx1) * cw;
+      const sy = ny1 * ch;
+      const ex = (1 - nx2) * cw;
+      const ey = ny2 * ch;
+
+      ctx.strokeStyle = '#00f0ff';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+      ctx.lineTo(ex, ey);
+      ctx.stroke();
+
+      ctx.fillStyle = '#00f0ff';
+      ctx.beginPath();
+      ctx.arc(sx, sy, 3, 0, Math.PI * 2);
+      ctx.fill();
     }
   }
 

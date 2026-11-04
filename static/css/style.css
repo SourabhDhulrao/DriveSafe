@@ -742,7 +742,7 @@ html, body {
   overflow: hidden;
 }
 
-#webcam-feed, #client-webcam-canvas {
+#webcam-feed {
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -750,7 +750,21 @@ html, body {
 }
 
 #client-webcam-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1);
   display: none;
+}
+
+#client-webcam-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: none;
+  pointer-events: none;
 }
 
 /* HUD Corner Reticles */
