@@ -292,11 +292,8 @@ class CameraController {
         }
 
         try {
-          // Draw to OFFSCREEN in-memory canvas ONLY (never draws raw video on screen -> ZERO FLICKER!)
-          this.offscreenCtx.save();
-          this.offscreenCtx.scale(-1, 1);
-          this.offscreenCtx.drawImage(this.videoEl, -capW, 0, capW, capH);
-          this.offscreenCtx.restore();
+          // Draw clean upright video frame to in-memory offscreen canvas
+          this.offscreenCtx.drawImage(this.videoEl, 0, 0, capW, capH);
 
           const base64Data = this.offscreenCanvas.toDataURL('image/jpeg', 0.60);
 
@@ -366,10 +363,10 @@ class CameraController {
     const isYawning = telemetry ? telemetry.is_yawning : false;
     const isNodding = telemetry ? telemetry.is_nodding : false;
 
-    // 1. Draw Corner HUD brackets around face area
+    // 1. Draw Corner HUD brackets around face area directly
     const [x1, y1, x2, y2] = summary.bbox;
-    const bx1 = (1 - x2) * cw;
-    const bx2 = (1 - x1) * cw;
+    const bx1 = x1 * cw;
+    const bx2 = x2 * cw;
     const by1 = y1 * ch;
     const by2 = y2 * ch;
     const bw = bx2 - bx1;
@@ -415,9 +412,9 @@ class CameraController {
     const drawContour = (pts) => {
       if (!pts || pts.length < 2) return;
       ctx.beginPath();
-      ctx.moveTo((1 - pts[0][0]) * cw, pts[0][1] * ch);
+      ctx.moveTo(pts[0][0] * cw, pts[0][1] * ch);
       for (let i = 1; i < pts.length; i++) {
-        ctx.lineTo((1 - pts[i][0]) * cw, pts[i][1] * ch);
+        ctx.lineTo(pts[i][0] * cw, pts[i][1] * ch);
       }
       ctx.closePath();
       ctx.stroke();
@@ -436,9 +433,9 @@ class CameraController {
     // 4. Draw 3D Nose Pose Direction Vector
     if (summary.nose_vector) {
       const [nx1, ny1, nx2, ny2] = summary.nose_vector;
-      const sx = (1 - nx1) * cw;
+      const sx = nx1 * cw;
       const sy = ny1 * ch;
-      const ex = (1 - nx2) * cw;
+      const ex = nx2 * cw;
       const ey = ny2 * ch;
 
       ctx.strokeStyle = '#00f0ff';

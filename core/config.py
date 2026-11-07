@@ -82,8 +82,8 @@ NIGHT_MODE_DEFAULT = "auto"           # "auto", "on", "off"
 NIGHT_LUMINANCE_THRESHOLD = 85.0      # Below this average luma (0-255), night mode activates
 NIGHT_GAMMA_BASE = 0.48               # Base non-linear gamma curve for shadow lifting
 NIGHT_CLAHE_CLIP_LIMIT = 3.8          # Enhanced CLAHE contrast for low-light facial edge recovery
-NIGHT_MIN_DETECTION_CONFIDENCE = 0.55 # Balanced confidence threshold to lock onto faces in dark cabins
-NIGHT_MIN_TRACKING_CONFIDENCE = 0.55  # Reliable tracking through shadows and head turns
+NIGHT_MIN_DETECTION_CONFIDENCE = 0.30 # Balanced confidence threshold to lock onto faces in dark cabins
+NIGHT_MIN_TRACKING_CONFIDENCE = 0.30  # Reliable tracking through shadows and head turns
 
 # Input Preprocessing
 ENABLE_CLAHE_PREPROCESSING = True     # Adaptive histogram equalization for low-light

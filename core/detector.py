@@ -92,14 +92,14 @@ class FaceLandmarkDetector:
 
     def _init_detector(self):
         base_options = python.BaseOptions(model_asset_path=self.model_path)
-        # RunningMode.IMAGE provides instantaneous, stateless detection without
-        # network timestamp drift, frame-drop desync, or Kalman velocity errors.
+        # 0.30 confidence threshold ensures robust face tracking across head rotations,
+        # slight camera tilt, glasses, and diverse ambient lighting without false dropouts.
         options = vision.FaceLandmarkerOptions(
             base_options=base_options,
             running_mode=vision.RunningMode.IMAGE,
             num_faces=1,
-            min_face_detection_confidence=0.45,
-            min_face_presence_confidence=0.45,
+            min_face_detection_confidence=0.30,
+            min_face_presence_confidence=0.30,
         )
         self.detector = vision.FaceLandmarker.create_from_options(options)
 
@@ -268,35 +268,60 @@ class FaceLandmarkDetector:
 
     def process_frame(self, bgr_frame):
         """
-        Process a BGR frame with automatic night driver enhancement.
-        Includes a secondary low-light rescue pass if the primary pass misses.
+        Process a BGR frame using multi-pass cascading detection:
+          Pass 1: Natural RGB (Zero preprocessing artifacts; optimal for daytime/indoor)
+          Pass 2: AGC Gamma + Bilateral + CLAHE (Engaged if dark or if Pass 1 missed)
+          Pass 3: Extreme Low-Light Rescue Pass (For unlit pitch-dark cabins)
         """
+        if bgr_frame is None or not hasattr(bgr_frame, 'shape') or len(bgr_frame.shape) < 3:
+            return False, {}, 0.0
+
         h, w, _ = bgr_frame.shape
 
-        # Primary pass (with adaptive night vision if dark)
-        enhanced = self._preprocess_frame(bgr_frame)
-        rgb_frame = cv2.cvtColor(enhanced, cv2.COLOR_BGR2RGB)
-        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
+        mean_lum = self._analyze_luminance(bgr_frame)
+        self.current_luminance = mean_lum
 
-        detection_result = self.detector.detect(mp_image)
+        if self.night_mode == "on":
+            should_activate_night = True
+        elif self.night_mode == "off":
+            should_activate_night = False
+        else:  # "auto"
+            should_activate_night = mean_lum < NIGHT_LUMINANCE_THRESHOLD
 
-        # Secondary low-light rescue pass for extreme darkness / rural night driving
-        if (
-            (not detection_result.face_landmarks or len(detection_result.face_landmarks) == 0)
-            and self.is_night_mode_active
-        ):
-            rescue_bgr = self._enhance_night_frame(bgr_frame, self.current_luminance, rescue=True)
-            rescue_rgb = cv2.cvtColor(rescue_bgr, cv2.COLOR_BGR2RGB)
-            rescue_mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rescue_rgb)
+        self.is_night_mode_active = should_activate_night
+        detection_result = None
 
-            detection_result = self.detector.detect(rescue_mp_image)
+        # Pass 1: Natural RGB (MediaPipe was trained on natural RGB)
+        if not should_activate_night:
+            rgb_nat = cv2.cvtColor(bgr_frame, cv2.COLOR_BGR2RGB)
+            mp_nat = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_nat)
+            detection_result = self.detector.detect(mp_nat)
+            self.enhanced_frame = bgr_frame
+
+        # Pass 2: Adaptive Night / Contrast Enhancement Pass (if night mode or if natural pass missed)
+        if detection_result is None or not detection_result.face_landmarks or len(detection_result.face_landmarks) == 0:
+            enhanced_bgr = self._enhance_night_frame(bgr_frame, mean_lum, rescue=False)
+            rgb_enh = cv2.cvtColor(enhanced_bgr, cv2.COLOR_BGR2RGB)
+            mp_enh = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_enh)
+            detection_result = self.detector.detect(mp_enh)
             if detection_result.face_landmarks and len(detection_result.face_landmarks) > 0:
-                self.enhanced_frame = rescue_bgr
+                self.enhanced_frame = enhanced_bgr
+                self.is_night_mode_active = True
 
-        if (
-            not detection_result.face_landmarks
-            or len(detection_result.face_landmarks) == 0
-        ):
+        # Pass 3: Extreme Rescue Pass for pitch-black cabins
+        if not detection_result.face_landmarks or len(detection_result.face_landmarks) == 0:
+            if should_activate_night or mean_lum < 95.0:
+                rescue_bgr = self._enhance_night_frame(bgr_frame, mean_lum, rescue=True)
+                rgb_res = cv2.cvtColor(rescue_bgr, cv2.COLOR_BGR2RGB)
+                mp_res = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_res)
+                detection_result = self.detector.detect(mp_res)
+                if detection_result.face_landmarks and len(detection_result.face_landmarks) > 0:
+                    self.enhanced_frame = rescue_bgr
+                    self.is_night_mode_active = True
+
+        # If all passes missed, reset smoothed landmarks so old state doesn't ghost
+        if not detection_result or not detection_result.face_landmarks or len(detection_result.face_landmarks) == 0:
+            self._smoothed_landmarks = {}
             return False, {}, 0.0
 
         landmarks = detection_result.face_landmarks[0]
