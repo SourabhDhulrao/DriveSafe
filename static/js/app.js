@@ -474,7 +474,7 @@ document.addEventListener('DOMContentLoaded', () => {
         .then(() => {
           toggleSunglassesBtn.classList.toggle('active', forceSunglasses);
           if (sunglassesBtnText) {
-            sunglassesBtnText.textContent = forceSunglasses ? '🕶️ Sunglasses: Force ON' : '🕶️ Sunglasses: Auto';
+            sunglassesBtnText.textContent = forceSunglasses ? '🕶️ Goggles: Force ON' : '🕶️ Goggles: Auto';
           }
         })
         .catch(err => console.warn('Sunglasses toggle error:', err));

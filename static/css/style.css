@@ -629,6 +629,31 @@ html, body {
   animation: none;
 }
 
+/* Goggles / Sunglasses Toggle Button */
+.btn-goggles-toggle {
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 6px 13px;
+  border-radius: var(--radius-sm);
+  transition: all var(--trans-fast);
+  color: #38bdf8;
+  border-color: rgba(56, 189, 248, 0.35);
+  background: rgba(56, 189, 248, 0.08);
+}
+
+.btn-goggles-toggle:hover {
+  background: rgba(56, 189, 248, 0.18);
+  border-color: rgba(56, 189, 248, 0.6);
+  color: #38bdf8;
+}
+
+.btn-goggles-toggle.active {
+  background: rgba(245, 158, 11, 0.18) !important;
+  border-color: rgba(245, 158, 11, 0.6) !important;
+  color: #fbbf24 !important;
+  box-shadow: 0 0 14px rgba(245, 158, 11, 0.3) !important;
+}
+
 /* Floating Night HUD Chip */
 .hud-night-chip {
   background: rgba(12, 18, 28, 0.88) !important;

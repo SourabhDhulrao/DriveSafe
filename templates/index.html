@@ -80,7 +80,37 @@
               <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
               <circle cx="12" cy="13" r="4"/>
             </svg>
-            <span>Driver Feed & Landmarks</span>
+            <span>Driver Feed & Camera</span>
+          </div>
+          <div class="panel-actions">
+            <!-- Camera ON/OFF Button -->
+            <button id="btn-toggle-camera" class="btn btn-camera-toggle active" title="Turn Camera Feed On / Off">
+              <span class="btn-camera-indicator"></span>
+              <svg class="cam-icon-on" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M23 7l-7 5 7 5V7z"/>
+                <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+              </svg>
+              <svg class="cam-icon-off" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:none;">
+                <path d="M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h7"/>
+                <path d="M23 7l-7 5 7 5V7z"/>
+                <line x1="1" y1="1" x2="23" y2="23"/>
+              </svg>
+              <span id="camera-btn-text">Camera ON</span>
+            </button>
+
+            <!-- Nightmode Section -->
+            <button id="btn-toggle-night" class="btn btn-night-toggle" title="Night Vision Mode: Auto / ON / OFF">
+              <span class="btn-night-dot"></span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+              </svg>
+              <span id="night-btn-text">Night: Auto</span>
+            </button>
+
+            <!-- Goggles Section -->
+            <button id="btn-toggle-sunglasses" class="btn btn-outline btn-goggles-toggle" title="Goggles / Sunglasses Mode: Auto / Force ON">
+              <span id="sunglasses-btn-text">🕶️ Goggles: Auto</span>
+            </button>
           </div>
         </div>
 
@@ -91,6 +121,28 @@
           <!-- Client-side Browser WebRTC Video & Canvas Elements -->
           <video id="client-webcam-video" playsinline autoplay muted></video>
           <canvas id="client-webcam-canvas" style="display:none;"></canvas>
+
+          <!-- Camera Disabled / Off Screen Overlay -->
+          <div id="camera-off-overlay" class="camera-off-overlay">
+            <div class="camera-off-box">
+              <div class="camera-off-icon-ring">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h7"/>
+                  <path d="M23 7l-7 5 7 5V7z"/>
+                  <line x1="1" y1="1" x2="23" y2="23"/>
+                </svg>
+              </div>
+              <h4 class="camera-off-headline">CAMERA PAUSED</h4>
+              <p class="camera-off-subtitle">Driver monitoring is paused.</p>
+              <button id="btn-overlay-camera-on" class="btn btn-primary btn-sm btn-reconnect-cam">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M23 7l-7 5 7 5V7z"/>
+                  <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                </svg>
+                <span>Turn Camera ON</span>
+              </button>
+            </div>
+          </div>
 
           <!-- Cloud Deployment Camera Connect Prompt -->
           <div id="cloud-camera-prompt" class="cloud-cam-prompt" style="display:none;">
