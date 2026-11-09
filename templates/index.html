@@ -126,6 +126,7 @@
         <button class="btn btn-outline btn-sim-preset" data-preset="microsleep">Microsleep</button>
         <button class="btn btn-outline btn-sim-preset" data-preset="yawn">Yawning</button>
         <button class="btn btn-outline btn-sim-preset" data-preset="nodding">Head Nod</button>
+        <button class="btn btn-outline btn-sim-preset" data-preset="sunglasses">🕶️ Sunglasses Mode</button>
       </div>
     </div>
 
@@ -150,6 +151,10 @@
                 <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
               </svg>
               <span id="night-btn-text">Night Vision: Auto</span>
+            </button>
+            <!-- Sunglasses Mode Toggle Button -->
+            <button id="btn-toggle-sunglasses" class="btn btn-outline" title="Toggle Sunglasses Mode (Auto / Force ON)">
+              <span id="sunglasses-btn-text">🕶️ Sunglasses: Auto</span>
             </button>
             <!-- Camera ON/OFF Master Toggle Button -->
             <button id="btn-toggle-camera" class="btn btn-camera-toggle active" title="Turn Camera Feed On / Off">
@@ -241,6 +246,10 @@
               <span class="chip-night-dot"></span>
               <span class="chip-label">🌙 NIGHT BOOST</span>
               <span id="val-luminance" class="chip-val">--L</span>
+            </div>
+            <div class="hud-chip hud-sunglasses-chip" id="hud-sunglasses-chip" style="display:none;">
+              <span class="chip-label">🕶️ SUNGLASSES</span>
+              <span id="val-sunglasses" class="chip-val">ACTIVE</span>
             </div>
           </div>
 

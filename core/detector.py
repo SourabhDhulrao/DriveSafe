@@ -35,6 +35,9 @@ from core.config import (
     NIGHT_MIN_DETECTION_CONFIDENCE,
     NIGHT_MIN_TRACKING_CONFIDENCE,
     NIGHT_MODE_DEFAULT,
+    SUNGLASSES_CONTRAST_RATIO_THRESH,
+    SUNGLASSES_MAX_EYE_LUMA,
+    SUNGLASSES_HYSTERESIS_FRAMES,
 )
 
 
@@ -80,6 +83,11 @@ class FaceLandmarkDetector:
         # Landmark temporal smoothing history
         self._landmark_history = deque(maxlen=LANDMARK_SMOOTHING_WINDOW)
         self._smoothed_landmarks = {}
+
+        # Sunglasses / Goggles Mode state
+        self.is_sunglasses_active = False
+        self._sunglasses_history = deque(maxlen=SUNGLASSES_HYSTERESIS_FRAMES)
+        self.sunglasses_ratio = 1.0
 
         # Monotonic timestamp counter for VIDEO running mode (microseconds)
         self._frame_timestamp_ms = 0
@@ -338,11 +346,80 @@ class FaceLandmarkDetector:
         return True, smoothed_dict, confidence
 
     # ------------------------------------------------------------------
+    # Sunglasses / Dark Goggles Detection Engine (Day & Night)
+    # ------------------------------------------------------------------
+
+    def detect_sunglasses(self, bgr_frame, landmarks_dict, current_ear=0.3):
+        """
+        Detect whether the driver is wearing dark goggles/sunglasses in both Day and Night modes.
+        Uses photometric eye-to-skin contrast ratio, local lens darkness, and temporal smoothing.
+        """
+        if not landmarks_dict or bgr_frame is None:
+            self._sunglasses_history.append(False)
+            if self._sunglasses_history.count(True) <= 1:
+                self.is_sunglasses_active = False
+            return False, 1.0
+
+        h, w = bgr_frame.shape[:2]
+
+        # Select frame to evaluate: in night mode, use enhanced frame if available for lifted contrast
+        eval_frame = self.enhanced_frame if (self.is_night_mode_active and self.enhanced_frame is not None) else bgr_frame
+        gray = cv2.cvtColor(eval_frame, cv2.COLOR_BGR2GRAY)
+
+        left_eye_indices = [33, 160, 158, 133, 153, 144]
+        right_eye_indices = [362, 385, 387, 263, 373, 380]
+        cheek_forehead_indices = [50, 205, 280, 425, 10, 151, 9]
+
+        def get_region_luma(indices, pad=6):
+            xs = [landmarks_dict[i][0] for i in indices if i in landmarks_dict]
+            ys = [landmarks_dict[i][1] for i in indices if i in landmarks_dict]
+            if not xs or not ys:
+                return None, None
+            x1, x2 = max(0, min(xs) - pad), min(w, max(xs) + pad)
+            y1, y2 = max(0, min(ys) - pad), min(h, max(ys) + pad)
+            patch = gray[y1:y2, x1:x2]
+            if patch.size == 0:
+                return None, None
+            return float(np.mean(patch)), float(np.std(patch))
+
+        l_luma, l_std = get_region_luma(left_eye_indices)
+        r_luma, r_std = get_region_luma(right_eye_indices)
+        skin_luma, _ = get_region_luma(cheek_forehead_indices, pad=10)
+
+        if l_luma is None or r_luma is None or skin_luma is None:
+            self._sunglasses_history.append(False)
+            return self.is_sunglasses_active, self.sunglasses_ratio
+
+        eye_luma = (l_luma + r_luma) / 2.0
+        contrast_ratio = eye_luma / max(1.0, skin_luma)
+        self.sunglasses_ratio = round(contrast_ratio, 3)
+
+        # Trigger conditions (both day and night):
+        # 1. Dark lenses absorb visible light: eye region is notably darker than surrounding facial skin
+        # 2. Or contrast ratio is low and EAR is depressed due to eyelid occlusion
+        # 3. In night mode with enhanced frame, dark goggles stay dark while skin is lifted by AGC
+        is_sunglasses_frame = (
+            (contrast_ratio < SUNGLASSES_CONTRAST_RATIO_THRESH and eye_luma < SUNGLASSES_MAX_EYE_LUMA) or
+            (contrast_ratio < 0.60 and eye_luma < 52.0 and current_ear < 0.19) or
+            (self.is_night_mode_active and contrast_ratio < 0.50 and eye_luma < 45.0)
+        )
+
+        self._sunglasses_history.append(is_sunglasses_frame)
+
+        # Hysteresis: requires 3/5 positive frames to engage, 4/5 negative frames to release
+        if self._sunglasses_history.count(True) >= 3:
+            self.is_sunglasses_active = True
+        elif self._sunglasses_history.count(False) >= 4:
+            self.is_sunglasses_active = False
+
+        return self.is_sunglasses_active, self.sunglasses_ratio
+
+    # ------------------------------------------------------------------
     # Augmented HUD Rendering with Night Driver Display
     # ------------------------------------------------------------------
 
     def draw_hud(self, frame, landmarks_dict, is_closed=False, is_yawning=False,
-                 nose_2d=None, nose_endpoint=None, state_info=None):
+                 nose_2d=None, nose_endpoint=None, state_info=None, is_sunglasses=None):
         """
         Draw clean, high-tech automotive HUD contours directly onto the frame.
         In Night Mode, uses the night-enhanced illuminated frame so the driver is clearly visible.
@@ -372,9 +449,15 @@ class FaceLandmarkDetector:
 
         hud_frame = base_frame.copy()
 
-        # Eye Contours: Glowing Cyan (Open) or Urgent Red (Closed)
-        eye_color = (0, 0, 255) if is_closed else (255, 230, 0)
-        thick = 2 if is_closed else 1
+        active_sunglasses = self.is_sunglasses_active if is_sunglasses is None else is_sunglasses
+
+        # Eye Contours: In Sunglasses Mode, draw amber/cyan frame (not false red closed)
+        if active_sunglasses:
+            eye_color = (0, 180, 255)  # Amber-gold tinted glasses indicator
+            thick = 2
+        else:
+            eye_color = (0, 0, 255) if is_closed else (255, 230, 0)
+            thick = 2 if is_closed else 1
 
         # Draw Left Eye
         left_pts = np.array([landmarks_dict[i][:2] for i in LEFT_EYE_CONTOUR if i in landmarks_dict], np.int32)
@@ -385,6 +468,12 @@ class FaceLandmarkDetector:
         right_pts = np.array([landmarks_dict[i][:2] for i in RIGHT_EYE_CONTOUR if i in landmarks_dict], np.int32)
         if len(right_pts) > 0:
             cv2.polylines(hud_frame, [right_pts], isClosed=True, color=eye_color, thickness=thick, lineType=cv2.LINE_AA)
+
+        # In Sunglasses Mode, draw glasses bridge connecting the two lenses
+        if active_sunglasses and len(left_pts) > 0 and len(right_pts) > 0:
+            p_bridge_l = tuple(landmarks_dict[133][:2]) if 133 in landmarks_dict else tuple(left_pts[0])
+            p_bridge_r = tuple(landmarks_dict[362][:2]) if 362 in landmarks_dict else tuple(right_pts[0])
+            cv2.line(hud_frame, p_bridge_l, p_bridge_r, (0, 180, 255), 2, cv2.LINE_AA)
 
         # Draw Mouth: Green (Normal) or Crimson (Yawning)
         mouth_color = (0, 60, 255) if is_yawning else (80, 220, 80)
@@ -430,6 +519,10 @@ class FaceLandmarkDetector:
         if self.is_night_mode_active:
             self._draw_night_badge(base_frame)
 
+        # Draw Sunglasses Active badge if detected
+        if active_sunglasses:
+            self._draw_sunglasses_badge(base_frame)
+
         return base_frame
 
     def _draw_night_badge(self, img):
@@ -446,3 +539,14 @@ class FaceLandmarkDetector:
         label = f"NIGHT VISION ({int(self.current_luminance)}L)"
         cv2.putText(img, label, (bx + 20, by - 5),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.38, (0, 220, 255), 1, cv2.LINE_AA)
+
+    def _draw_sunglasses_badge(self, img):
+        """Draw sunglasses active badge indicating head-pose & oral monitoring."""
+        h, w = img.shape[:2]
+        bx, by = 16, h - 44 if self.is_night_mode_active else h - 16
+        cv2.rectangle(img, (bx, by - 20), (bx + 230, by + 4), (12, 18, 28), -1)
+        cv2.rectangle(img, (bx, by - 20), (bx + 230, by + 4), (0, 180, 255), 1, cv2.LINE_AA)
+        cv2.circle(img, (bx + 10, by - 8), 4, (0, 180, 255), -1, cv2.LINE_AA)
+        label = "SUNGLASSES MODE (HEAD & ORAL)"
+        cv2.putText(img, label, (bx + 20, by - 5),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.36, (0, 180, 255), 1, cv2.LINE_AA)

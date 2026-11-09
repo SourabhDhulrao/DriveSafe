@@ -184,11 +184,24 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
+    // Sunglasses Active HUD Indicator
+    const hudSunglassesChip = document.getElementById('hud-sunglasses-chip');
+    if (hudSunglassesChip) {
+      if (t.sunglasses_detected || t.sunglasses_mode) {
+        hudSunglassesChip.style.display = 'inline-flex';
+      } else {
+        hudSunglassesChip.style.display = 'none';
+      }
+    }
+
     // 3. Human-Readable Vital Status Pills
     const vitalEyesPill = document.getElementById('vital-status-eyes');
     const vitalEyesText = document.getElementById('vital-status-eyes-text');
     if (vitalEyesPill && vitalEyesText) {
-      if (t.is_closed) {
+      if (t.sunglasses_detected || t.sunglasses_mode) {
+        vitalEyesText.textContent = '🕶️ Sunglasses Active';
+        vitalEyesPill.className = 'vital-status-pill warning';
+      } else if (t.is_closed) {
         vitalEyesText.textContent = (t.closure_duration_sec > 1.0) ? 'Microsleep!' : 'Eyes Closed';
         vitalEyesPill.className = 'vital-status-pill alert';
       } else if (t.perclos > 0.15) {
@@ -442,6 +455,29 @@ document.addEventListener('DOMContentLoaded', () => {
           }
         })
         .catch(err => console.warn('Night mode toggle error:', err));
+    });
+  }
+
+  // Toggle Sunglasses Force / Auto Mode
+  const toggleSunglassesBtn = document.getElementById('btn-toggle-sunglasses');
+  const sunglassesBtnText = document.getElementById('sunglasses-btn-text');
+  let forceSunglasses = false;
+  if (toggleSunglassesBtn) {
+    toggleSunglassesBtn.addEventListener('click', () => {
+      forceSunglasses = !forceSunglasses;
+      fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ force_sunglasses: forceSunglasses })
+      })
+        .then(res => res.json())
+        .then(() => {
+          toggleSunglassesBtn.classList.toggle('active', forceSunglasses);
+          if (sunglassesBtnText) {
+            sunglassesBtnText.textContent = forceSunglasses ? '🕶️ Sunglasses: Force ON' : '🕶️ Sunglasses: Auto';
+          }
+        })
+        .catch(err => console.warn('Sunglasses toggle error:', err));
     });
   }
 });

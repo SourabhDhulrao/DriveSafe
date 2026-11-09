@@ -359,7 +359,8 @@ class CameraController {
       return;
     }
 
-    const isClosed = telemetry ? telemetry.is_closed : false;
+    const isSunglasses = telemetry ? (telemetry.sunglasses_detected || telemetry.sunglasses_mode) : false;
+    const isClosed = isSunglasses ? false : (telemetry ? telemetry.is_closed : false);
     const isYawning = telemetry ? telemetry.is_yawning : false;
     const isNodding = telemetry ? telemetry.is_nodding : false;
 
@@ -373,7 +374,7 @@ class CameraController {
     const bh = by2 - by1;
 
     const bracketLen = Math.min(22, Math.max(12, bw * 0.22));
-    ctx.strokeStyle = isClosed ? '#ef4444' : '#00f0ff';
+    ctx.strokeStyle = isClosed ? '#ef4444' : (isSunglasses ? '#f59e0b' : '#00f0ff');
     ctx.lineWidth = 2;
 
     // Top-Left
@@ -405,7 +406,7 @@ class CameraController {
     ctx.stroke();
 
     // 2. Draw Eye Contours
-    const eyeColor = isClosed ? '#ef4444' : '#38bdf8';
+    const eyeColor = isSunglasses ? '#f59e0b' : (isClosed ? '#ef4444' : '#38bdf8');
     ctx.strokeStyle = eyeColor;
     ctx.lineWidth = isClosed ? 2.5 : 1.5;
 
@@ -502,36 +503,64 @@ class CameraController {
 
     // Eyes
     let isClosed = false;
+    let isSunglasses = (preset === 'sunglasses');
     if (preset === 'microsleep') {
       isClosed = true;
     } else if (preset === 'drowsy') {
       isClosed = Math.sin(timer * 2) > 0.3;
+    } else if (isSunglasses) {
+      isClosed = false; // Eyes occluded by sunglasses
     } else {
       isClosed = Math.sin(timer * 4) > 0.95; // Brief normal blink
     }
 
-    ctx.strokeStyle = isClosed ? '#ef4444' : '#10b981';
-    ctx.lineWidth = 3;
+    if (isSunglasses) {
+      // Draw dark tinted sunglasses lenses & metallic bridge
+      ctx.fillStyle = '#0f172a';
+      ctx.strokeStyle = '#f59e0b';
+      ctx.lineWidth = 2.5;
 
-    // Left eye
-    ctx.beginPath();
-    if (isClosed) {
-      ctx.moveTo(cx - 50, cy - 25 + pitchOffset);
-      ctx.lineTo(cx - 20, cy - 25 + pitchOffset);
-    } else {
-      ctx.ellipse(cx - 35, cy - 25 + pitchOffset, 15, 8, 0, 0, Math.PI * 2);
-    }
-    ctx.stroke();
+      // Left lens
+      ctx.beginPath();
+      ctx.ellipse(cx - 35, cy - 25 + pitchOffset, 22, 14, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
 
-    // Right eye
-    ctx.beginPath();
-    if (isClosed) {
-      ctx.moveTo(cx + 20, cy - 25 + pitchOffset);
-      ctx.lineTo(cx + 50, cy - 25 + pitchOffset);
+      // Right lens
+      ctx.beginPath();
+      ctx.ellipse(cx + 35, cy - 25 + pitchOffset, 22, 14, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // Bridge
+      ctx.beginPath();
+      ctx.moveTo(cx - 13, cy - 25 + pitchOffset);
+      ctx.lineTo(cx + 13, cy - 25 + pitchOffset);
+      ctx.stroke();
     } else {
-      ctx.ellipse(cx + 35, cy - 25 + pitchOffset, 15, 8, 0, 0, Math.PI * 2);
+      ctx.strokeStyle = isClosed ? '#ef4444' : '#10b981';
+      ctx.lineWidth = 3;
+
+      // Left eye
+      ctx.beginPath();
+      if (isClosed) {
+        ctx.moveTo(cx - 50, cy - 25 + pitchOffset);
+        ctx.lineTo(cx - 20, cy - 25 + pitchOffset);
+      } else {
+        ctx.ellipse(cx - 35, cy - 25 + pitchOffset, 15, 8, 0, 0, Math.PI * 2);
+      }
+      ctx.stroke();
+
+      // Right eye
+      ctx.beginPath();
+      if (isClosed) {
+        ctx.moveTo(cx + 20, cy - 25 + pitchOffset);
+        ctx.lineTo(cx + 50, cy - 25 + pitchOffset);
+      } else {
+        ctx.ellipse(cx + 35, cy - 25 + pitchOffset, 15, 8, 0, 0, Math.PI * 2);
+      }
+      ctx.stroke();
     }
-    ctx.stroke();
 
     // Mouth
     let isYawn = (preset === 'yawn');

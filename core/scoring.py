@@ -11,7 +11,8 @@ import numpy as np
 from core.config import (
     RISK_STATES,
     EMA_ALPHA_RISE,
-    EMA_ALPHA_DECAY
+    EMA_ALPHA_DECAY,
+    SUNGLASSES_WEIGHTS,
 )
 
 
@@ -66,6 +67,7 @@ class HeuristicDrowsinessScorer(BaseDrowsinessModel):
         recent_nods = features.get("recent_nods_5min", 0)
 
         face_detected = features.get("face_detected", True)
+        sunglasses_mode = features.get("sunglasses_detected", False)
 
         if not face_detected:
             # Absence of face or driver looking completely away from camera
@@ -81,29 +83,31 @@ class HeuristicDrowsinessScorer(BaseDrowsinessModel):
             }
 
         # 1. PERCLOS & Eye Aspect Ratio Deficit Component (0 to 100)
-        # Normal driving PERCLOS is < 0.08. Drowsy driving is 0.15 - 0.30+.
-        perclos_risk = min(100.0, (perclos / 0.30) * 100.0)
+        # In Sunglasses Mode, eyes are occluded by dark tinted lenses -> suppress eye risk to prevent false alarms
+        if sunglasses_mode:
+            eye_component = 0.0
+            blink_component = 0.0
+        else:
+            # Normal driving PERCLOS is < 0.08. Drowsy driving is 0.15 - 0.30+.
+            perclos_risk = min(100.0, (perclos / 0.30) * 100.0)
 
-        # Instantaneous eye closure penalty
-        ear_deficit = max(0.0, (ear_thresh - ear) / max(0.05, ear_thresh))
-        ear_instant_risk = min(100.0, ear_deficit * 100.0)
-        eye_component = (perclos_risk * 0.65) + (ear_instant_risk * 0.35)
+            # Instantaneous eye closure penalty
+            ear_deficit = max(0.0, (ear_thresh - ear) / max(0.05, ear_thresh))
+            ear_instant_risk = min(100.0, ear_deficit * 100.0)
+            eye_component = (perclos_risk * 0.65) + (ear_instant_risk * 0.35)
 
-        # 2. Blink Dynamics Component (0 to 100)
-        # Slow blinks (> 350ms) are classic indicators of microsleep onset.
-        # Normal blink: 150-250ms.
-        blink_duration_risk = 0.0
-        if avg_blink_ms > 280:
-            blink_duration_risk = min(100.0, ((avg_blink_ms - 280) / 300.0) * 100.0)
+            # 2. Blink Dynamics Component (0 to 100)
+            blink_duration_risk = 0.0
+            if avg_blink_ms > 280:
+                blink_duration_risk = min(100.0, ((avg_blink_ms - 280) / 300.0) * 100.0)
 
-        # Abnormal blink rate: very high (>30 bpm) = struggle against sleep; very low (<8 bpm) = stare
-        blink_rate_risk = 0.0
-        if blink_rate > 28:
-            blink_rate_risk = min(100.0, ((blink_rate - 28) / 20.0) * 70.0)
-        elif blink_rate < 8 and eye_component > 20:
-            blink_rate_risk = 40.0
+            blink_rate_risk = 0.0
+            if blink_rate > 28:
+                blink_rate_risk = min(100.0, ((blink_rate - 28) / 20.0) * 70.0)
+            elif blink_rate < 8 and eye_component > 20:
+                blink_rate_risk = 40.0
 
-        blink_component = max(blink_duration_risk, (blink_duration_risk * 0.6) + (blink_rate_risk * 0.4))
+            blink_component = max(blink_duration_risk, (blink_duration_risk * 0.6) + (blink_rate_risk * 0.4))
 
         # 3. Yawning & Oral Fatigue Component (0 to 100)
         yawn_component = 0.0
@@ -126,30 +130,49 @@ class HeuristicDrowsinessScorer(BaseDrowsinessModel):
         elif recent_nods > 0:
             nod_component = min(80.0, max(nod_component, recent_nods * 25.0))
 
-        # Weighted Sum
-        raw_risk = (
-            (eye_component * self.weights["perclos"]) +
-            (blink_component * self.weights["blink_dynamics"]) +
-            (nod_component * self.weights["head_posture"]) +
-            (yawn_component * self.weights["yawn"])
-        )
+        # Weighted Sum (Dynamic weight rebalancing for Sunglasses Mode)
+        if sunglasses_mode:
+            raw_risk = (
+                (nod_component * SUNGLASSES_WEIGHTS["head_posture"]) +
+                (yawn_component * SUNGLASSES_WEIGHTS["yawn"])
+            )
+        else:
+            raw_risk = (
+                (eye_component * self.weights["perclos"]) +
+                (blink_component * self.weights["blink_dynamics"]) +
+                (nod_component * self.weights["head_posture"]) +
+                (yawn_component * self.weights["yawn"])
+            )
 
         # Critical Overrides for Immediate Life-Safety Hazards
         override_reason = None
 
-        # Continuous eye closure > 1.1s is an active microsleep
-        if is_closed and closure_sec >= 1.0:
-            critical_score = min(100.0, 85.0 + (closure_sec - 1.0) * 15.0)
-            if critical_score > raw_risk:
-                raw_risk = critical_score
-                override_reason = f"Microsleep Detected: Eyes closed for {closure_sec:.1f}s"
+        if sunglasses_mode:
+            # In sunglasses mode, eye closure cannot be verified; monitor head droop and sustained yawns
+            if is_nodding and nod_duration >= 1.0:
+                critical_score = min(100.0, 85.0 + (nod_duration - 1.0) * 15.0)
+                if critical_score > raw_risk:
+                    raw_risk = critical_score
+                    override_reason = f"Severe Head Nod: Driver head drooping for {nod_duration:.1f}s (Sunglasses Mode)"
+            elif is_yawning and yawn_duration >= 2.5:
+                critical_score = min(90.0, 75.0 + (yawn_duration - 2.5) * 10.0)
+                if critical_score > raw_risk:
+                    raw_risk = critical_score
+                    override_reason = f"Prolonged Yawn: Driver yawning for {yawn_duration:.1f}s (Sunglasses Mode)"
+        else:
+            # Continuous eye closure > 1.1s is an active microsleep
+            if is_closed and closure_sec >= 1.0:
+                critical_score = min(100.0, 85.0 + (closure_sec - 1.0) * 15.0)
+                if critical_score > raw_risk:
+                    raw_risk = critical_score
+                    override_reason = f"Microsleep Detected: Eyes closed for {closure_sec:.1f}s"
 
-        # Continuous downward head drop > 1.2s
-        if is_nodding and nod_duration >= 1.2:
-            critical_score = min(100.0, 85.0 + (nod_duration - 1.2) * 10.0)
-            if critical_score > raw_risk:
-                raw_risk = critical_score
-                override_reason = f"Severe Head Nod: Driver head drooping for {nod_duration:.1f}s"
+            # Continuous downward head drop > 1.2s
+            if is_nodding and nod_duration >= 1.2:
+                critical_score = min(100.0, 85.0 + (nod_duration - 1.2) * 10.0)
+                if critical_score > raw_risk:
+                    raw_risk = critical_score
+                    override_reason = f"Severe Head Nod: Driver head drooping for {nod_duration:.1f}s"
 
         return {
             "raw_risk": float(round(raw_risk, 2)),
@@ -257,8 +280,10 @@ class DrowsinessScorer:
         # Slow alpha when risk declines (prevents premature safety clearance)
         if raw_risk > self.smoothed_score:
             alpha = EMA_ALPHA_RISE
-            # Accelerate even faster if high risk / critical
-            if raw_risk > 70.0:
+            # Accelerate even faster if high risk / critical or override
+            if override:
+                alpha = 0.90
+            elif raw_risk > 70.0:
                 alpha = 0.45
         else:
             alpha = EMA_ALPHA_DECAY

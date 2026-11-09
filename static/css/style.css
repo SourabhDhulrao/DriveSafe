@@ -651,6 +651,22 @@ html, body {
   margin-right: 2px;
 }
 
+/* Floating Sunglasses HUD Chip */
+.hud-sunglasses-chip {
+  background: rgba(12, 18, 28, 0.88) !important;
+  border-color: rgba(0, 240, 255, 0.45) !important;
+  color: #00f0ff !important;
+}
+
+.hud-sunglasses-chip .chip-label {
+  color: #00f0ff !important;
+}
+
+.hud-sunglasses-chip .chip-val {
+  color: #38bdf8 !important;
+  font-weight: 700;
+}
+
 /* Camera On/Off Toggle Button */
 .btn-camera-toggle {
   display: inline-flex;

@@ -64,6 +64,7 @@ class DriveSafePipeline:
 
         # Visual preferences
         self.show_hud_overlay = True
+        self.force_sunglasses_mode = False
 
         # Start initial active session
         self.start_new_session(self.driver_name)
@@ -73,6 +74,9 @@ class DriveSafePipeline:
             "timestamp": time.time(),
             "face_detected": False,
             "confidence": 0.0,
+            "sunglasses_detected": False,
+            "sunglasses_ratio": 1.0,
+            "sunglasses_mode": False,
             "ear": 0.30,
             "left_ear": 0.30,
             "right_ear": 0.30,
@@ -222,11 +226,27 @@ class DriveSafePipeline:
             self.nod_tracker.set_baseline(baselines["baseline_pitch"])
 
         # 4. Update Stateful Trackers
+        is_sunglasses = False
+        contrast_ratio = 1.0
+
         if face_detected:
+            # Sunglasses / Goggles detection (day & night)
+            is_sunglasses, contrast_ratio = self.detector.detect_sunglasses(
+                frame_bgr, landmarks_dict, current_ear=avg_ear
+            )
+            if self.force_sunglasses_mode:
+                is_sunglasses = True
+
             blink_info = self.blink_tracker.update(avg_ear, current_time=now)
+            # If sunglasses mode is engaged, suppress spurious eye-closure to avoid false alarms
+            if is_sunglasses:
+                blink_info["is_closed"] = False
+                blink_info["closure_duration_sec"] = 0.0
+                blink_info["is_microsleep"] = False
+
             yawn_info = self.yawn_tracker.update(mar, current_time=now)
             nod_info = self.nod_tracker.update(pitch, current_time=now)
-            perclos = self.perclos_calc.update(blink_info["is_closed"], current_time=now)
+            perclos = 0.0 if is_sunglasses else self.perclos_calc.update(blink_info["is_closed"], current_time=now)
         else:
             blink_info = {
                 "is_closed": False,
@@ -257,6 +277,8 @@ class DriveSafePipeline:
         # 5. Multimodal Risk Scoring
         feature_bundle = {
             "face_detected": face_detected,
+            "sunglasses_detected": is_sunglasses,
+            "sunglasses_ratio": contrast_ratio,
             "ear": avg_ear,
             "baseline_ear": self.calibration.baselines.get("baseline_ear", 0.30),
             "ear_threshold": self.calibration.baselines.get("ear_threshold", 0.22),
@@ -298,7 +320,8 @@ class DriveSafePipeline:
                 is_yawning=yawn_info["is_yawning"],
                 nose_2d=nose_2d,
                 nose_endpoint=nose_endpoint,
-                state_info=risk_eval
+                state_info=risk_eval,
+                is_sunglasses=is_sunglasses
             )
 
         # 8. Package Telemetry
@@ -307,6 +330,9 @@ class DriveSafePipeline:
             "session_id": self.session_id,
             "face_detected": face_detected,
             "confidence": round(confidence * 100, 1) if face_detected else 0.0,
+            "sunglasses_detected": is_sunglasses,
+            "sunglasses_ratio": contrast_ratio,
+            "sunglasses_mode": is_sunglasses,
             "ear": round(avg_ear, 3),
             "left_ear": round(left_ear, 3),
             "right_ear": round(right_ear, 3),

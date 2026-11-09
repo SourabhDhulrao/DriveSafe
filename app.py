@@ -171,11 +171,15 @@ def update_settings():
         pipeline.show_hud_overlay = bool(data["show_hud_overlay"])
     if "night_mode" in data:
         pipeline.detector.set_night_mode(str(data["night_mode"]))
+    if "force_sunglasses" in data:
+        pipeline.force_sunglasses_mode = bool(data["force_sunglasses"])
     return jsonify({
         "success": True,
         "show_hud_overlay": pipeline.show_hud_overlay,
         "night_mode": pipeline.detector.night_mode,
-        "is_night_mode_active": pipeline.detector.is_night_mode_active
+        "is_night_mode_active": pipeline.detector.is_night_mode_active,
+        "force_sunglasses": pipeline.force_sunglasses_mode,
+        "sunglasses_detected": pipeline.latest_telemetry.get("sunglasses_detected", False)
     })
 
 

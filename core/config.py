@@ -55,6 +55,17 @@ DEFAULT_YAWN_MIN_DURATION_SEC = 1.4  # Sustained open mouth for >1.4s = yawn
 DEFAULT_PITCH_NOD_DROP_DEG = 14.0    # Pitch dip below neutral
 DEFAULT_MICROSLEEP_SEC = 1.1         # Eye closure > 1.1s = microsleep event
 
+# Sunglasses / Goggles Mode Parameters
+SUNGLASSES_CONTRAST_RATIO_THRESH = 0.52   # Eye luma / Skin luma below this indicates dark tinted lenses
+SUNGLASSES_MAX_EYE_LUMA = 65.0            # Dark tint absorbs visible light
+SUNGLASSES_HYSTERESIS_FRAMES = 5          # Consecutive frames to engage/disengage mode
+SUNGLASSES_WEIGHTS = {
+    "perclos": 0.0,
+    "blink_dynamics": 0.0,
+    "head_posture": 0.55,
+    "yawn": 0.45
+}
+
 # Calibration Defaults
 CALIBRATION_DURATION_SEC = 10.0      # Calibration window length
 CALIBRATION_MIN_FRAMES = 60          # Minimum valid face frames required
@@ -64,10 +75,10 @@ PERCLOS_WINDOW_SEC = 30.0
 
 # Drowsiness Risk State Classification Bounds (0-100)
 RISK_STATES = {
-    "SAFE": {"range": (0, 30), "color": "#10b981", "label": "Safe", "code": "safe"},
-    "CAUTION": {"range": (31, 60), "color": "#f59e0b", "label": "Caution", "code": "caution"},
-    "HIGH_RISK": {"range": (61, 80), "color": "#f97316", "label": "High Risk", "code": "high_risk"},
-    "CRITICAL": {"range": (81, 100), "color": "#ef4444", "label": "Critical Alert", "code": "critical"}
+    "SAFE": {"range": (0.0, 30.0), "color": "#10b981", "label": "Safe", "code": "safe"},
+    "CAUTION": {"range": (30.0, 60.0), "color": "#f59e0b", "label": "Caution", "code": "caution"},
+    "HIGH_RISK": {"range": (60.0, 80.0), "color": "#f97316", "label": "High Risk", "code": "high_risk"},
+    "CRITICAL": {"range": (80.0, 100.0), "color": "#ef4444", "label": "Critical Alert", "code": "critical"}
 }
 
 # Smoothing Parameters
