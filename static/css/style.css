@@ -1040,16 +1040,18 @@ html, body {
 .intelligence-panel {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  height: 100%;
 }
 
 /* Master Risk Gauge Card */
 .risk-gauge-card {
+  flex: 1;
+  min-height: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 22px 24px;
+  padding: 36px 30px;
   position: relative;
   overflow: hidden;
 }
@@ -1084,18 +1086,18 @@ html, body {
 }
 
 .risk-score-label {
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 2px;
+  font-size: 0.85rem;
+  font-weight: 800;
+  letter-spacing: 2.5px;
   text-transform: uppercase;
   color: var(--text-muted);
 }
 
 .gauge-svg-container {
   position: relative;
-  width: 200px;
-  height: 200px;
-  margin: 4px 0;
+  width: 270px;
+  height: 270px;
+  margin: 24px 0 20px 0;
 }
 
 .gauge-svg {
@@ -1140,7 +1142,7 @@ html, body {
 
 .risk-numeric-score {
   font-family: var(--font-display);
-  font-size: 3.5rem;
+  font-size: 5rem;
   font-weight: 800;
   line-height: 0.95;
   color: var(--active-state-color, var(--color-safe));
@@ -1150,35 +1152,35 @@ html, body {
 
 .score-percent-symbol {
   font-family: var(--font-mono);
-  font-size: 0.8rem;
+  font-size: 0.95rem;
   font-weight: 600;
   color: var(--text-dim);
 }
 
 .score-caption {
-  font-size: 0.68rem;
-  font-weight: 600;
-  letter-spacing: 1.5px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 2px;
   text-transform: uppercase;
   color: var(--text-muted);
-  margin-top: 4px;
+  margin-top: 6px;
 }
 
 .risk-state-badge {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 20px;
+  padding: 10px 32px;
   border-radius: var(--radius-pill);
   font-family: var(--font-display);
-  font-size: 0.95rem;
+  font-size: 1.15rem;
   font-weight: 800;
-  letter-spacing: 0.8px;
+  letter-spacing: 1.2px;
   text-transform: uppercase;
   color: #fff;
   background: var(--active-state-color, var(--color-safe));
-  box-shadow: 0 0 20px var(--active-glow-color, var(--color-safe-glow));
-  margin-top: 6px;
+  box-shadow: 0 0 24px var(--active-glow-color, var(--color-safe-glow));
+  margin-top: 12px;
   transition: all 0.4s ease;
 }
 
