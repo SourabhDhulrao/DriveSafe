@@ -514,7 +514,10 @@ class CameraStream:
             self.thread = None
         with self.lock:
             if self.cap is not None:
-                self.cap.release()
+                try:
+                    self.cap.release()
+                except Exception:
+                    pass
                 self.cap = None
             self.camera_available = False
             self.latest_frame = None

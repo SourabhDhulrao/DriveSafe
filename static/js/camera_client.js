@@ -56,6 +56,22 @@ class CameraController {
         this.setMode('browser');
       });
     }
+    const btnRetryCam = document.getElementById('btn-retry-camera');
+    if (btnRetryCam) {
+      btnRetryCam.addEventListener('click', () => {
+        const errOverlay = document.getElementById('camera-error-overlay');
+        if (errOverlay) errOverlay.style.display = 'none';
+        this.startBrowserWebcam();
+      });
+    }
+    const btnDemoMode = document.getElementById('btn-demo-mode');
+    if (btnDemoMode) {
+      btnDemoMode.addEventListener('click', () => {
+        const errOverlay = document.getElementById('camera-error-overlay');
+        if (errOverlay) errOverlay.style.display = 'none';
+        this.setMode('simulation');
+      });
+    }
   }
 
   syncInitialState() {
@@ -71,16 +87,21 @@ class CameraController {
         const isRemote = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
         if (data.camera_available === false || isRemote) {
           const prompt = document.getElementById('cloud-camera-prompt');
-          if (prompt && this.mode === 'server') {
-            prompt.style.display = 'flex';
-          }
+          if (prompt) prompt.style.display = 'none';
           const sourceSelect = document.getElementById('camera-source-select');
           if (sourceSelect) {
             sourceSelect.value = 'browser';
           }
+          // On cloud Render or when hardware camera is absent, automatically connect device browser camera
+          this.setMode('browser');
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        const isRemote = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+        if (isRemote) {
+          this.setMode('browser');
+        }
+      });
   }
 
   updateCameraUI() {
@@ -195,6 +216,12 @@ class CameraController {
       if (this.videoEl) this.videoEl.style.display = 'block';
       this.canvasEl.style.display = 'block';
       this.canvasEl.style.position = 'absolute';
+      // Release server hardware camera capture to prevent hardware lock conflicts on local machine
+      fetch('/api/camera/toggle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: false })
+      }).catch(() => {});
       this.startBrowserWebcam();
     } else if (mode === 'simulation') {
       if (this.videoEl) this.videoEl.style.display = 'none';
@@ -237,6 +264,11 @@ class CameraController {
 
   async startBrowserWebcam() {
     this._stopBrowserStream();
+    const errOverlay = document.getElementById('camera-error-overlay');
+    if (errOverlay) errOverlay.style.display = 'none';
+    const prompt = document.getElementById('cloud-camera-prompt');
+    if (prompt) prompt.style.display = 'none';
+
     try {
       try {
         this.mediaStream = await navigator.mediaDevices.getUserMedia({
@@ -282,9 +314,6 @@ class CameraController {
       this.browserLoopActive = true;
       this.isProcessing = false;
 
-      const prompt = document.getElementById('cloud-camera-prompt');
-      if (prompt) prompt.style.display = 'none';
-
       // Non-blocking adaptive dispatch loop (eliminates blinking, queues, and hanging)
       const dispatchFrame = async () => {
         if (!this.browserLoopActive || !this.isCameraOn || this.mode !== 'browser') {
@@ -327,13 +356,40 @@ class CameraController {
 
     } catch (err) {
       console.error('Browser webcam error:', err);
-      let msg = 'Unable to access camera: ' + err.message;
-      if (err.name === 'NotReadableError' || (err.message && err.message.toLowerCase().includes('in use'))) {
-        msg = '📷 Camera Hardware Locked: Another app is currently using your webcam (such as Zoom, Microsoft Teams, Skype, or another browser tab).\n\nPlease close Zoom or other apps using your camera, then click "Connect Device Camera" again.';
-      } else if (err.name === 'NotAllowedError') {
-        msg = 'Camera permission was denied.\n\nPlease click the lock or camera icon in your browser address bar and choose "Allow".';
+      const errOverlay = document.getElementById('camera-error-overlay');
+      const errTitle = document.getElementById('cam-err-title');
+      const errDesc = document.getElementById('cam-err-desc');
+
+      if (errOverlay) {
+        errOverlay.style.display = 'flex';
+        const isDeviceInUse = err.name === 'NotReadableError' ||
+          (err.message && (err.message.toLowerCase().includes('in use') || err.message.toLowerCase().includes('could not start')));
+
+        if (isDeviceInUse) {
+          if (errTitle) errTitle.textContent = 'Camera In Use by Another Application';
+          if (errDesc) {
+            errDesc.innerHTML = 'Your webcam is currently locked exclusively by another program on your computer.<br><br>' +
+              '<strong>Quick Fix Steps:</strong><br>' +
+              '1. Close <strong>Zoom</strong> (seen in your open browser tabs), Teams, or Skype.<br>' +
+              '2. Close duplicate browser tabs or local apps using the webcam.<br>' +
+              '3. Click <strong>Retry Camera</strong> below.';
+          }
+        } else if (err.name === 'NotAllowedError') {
+          if (errTitle) errTitle.textContent = 'Camera Permission Blocked';
+          if (errDesc) {
+            errDesc.innerHTML = 'Browser camera access was denied or blocked.<br><br>' +
+              '<strong>Quick Fix Steps:</strong><br>' +
+              '1. Click the <strong>lock / camera icon</strong> on the left side of your browser address bar.<br>' +
+              '2. Change Camera permission to <strong>Allow</strong>.<br>' +
+              '3. Click <strong>Retry Camera</strong> below.';
+          }
+        } else {
+          if (errTitle) errTitle.textContent = 'Camera Connection Issue';
+          if (errDesc) {
+            errDesc.innerHTML = `Unable to connect to camera device (${err.name || 'Error'}: ${err.message || 'unknown'}).<br><br>Click <strong>Retry Camera</strong> or test with <strong>Live Demo Simulation</strong>.`;
+          }
+        }
       }
-      alert(msg);
     }
   }
 

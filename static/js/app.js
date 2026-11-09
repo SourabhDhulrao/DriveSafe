@@ -170,9 +170,18 @@ document.addEventListener('DOMContentLoaded', () => {
     if (confidenceEl) confidenceEl.textContent = `${t.confidence || 0}%`;
     if (fpsBadge) fpsBadge.textContent = `${Math.round(t.fps || 0)} FPS`;
 
-    // Night Mode Active HUD Indicator
+    // Night Mode Active HUD Indicator and Viewport Amplification
     const hudNightChip = document.getElementById('hud-night-chip');
     const valLuminance = document.getElementById('val-luminance');
+    const clientVideo = document.getElementById('client-webcam-video');
+    if (clientVideo) {
+      if (t.night_mode) {
+        clientVideo.classList.add('night-vision-enhanced');
+      } else {
+        clientVideo.classList.remove('night-vision-enhanced');
+      }
+    }
+
     if (hudNightChip) {
       if (t.night_mode) {
         hudNightChip.style.display = 'inline-flex';

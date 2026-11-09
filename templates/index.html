@@ -165,6 +165,38 @@
             </div>
           </div>
 
+          <!-- Camera In-Use / Hardware Locked Error Helper Overlay -->
+          <div id="camera-error-overlay" class="cloud-cam-prompt" style="display:none; z-index: 50;">
+            <div class="cloud-cam-box" style="border-color: rgba(245, 158, 11, 0.4); box-shadow: 0 16px 48px rgba(245, 158, 11, 0.15);">
+              <div class="cloud-cam-icon" style="color: #f59e0b; background: rgba(245, 158, 11, 0.15); border-color: rgba(245, 158, 11, 0.3);">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                  <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                </svg>
+              </div>
+              <h4 id="cam-err-title" class="cloud-cam-title" style="color: #f59e0b;">Camera Locked by Another App</h4>
+              <p id="cam-err-desc" class="cloud-cam-desc" style="font-size: 0.85rem; line-height: 1.5; color: #cbd5e1; margin-bottom: 16px;">
+                Your webcam is currently locked by another application (such as <strong>Zoom</strong>, <strong>Teams</strong>, or another browser tab).<br><br>
+                <strong>Quick Fix:</strong><br>
+                1. Close Zoom or apps using the webcam.<br>
+                2. Close duplicate browser tabs.<br>
+                3. Click <strong>Retry Camera</strong> below.
+              </p>
+              <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+                <button id="btn-retry-camera" class="btn btn-primary btn-md">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                    <polyline points="23 4 23 10 17 10"/>
+                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                  </svg>
+                  <span>Retry Camera</span>
+                </button>
+                <button id="btn-demo-mode" class="btn btn-outline btn-md" style="border-color: rgba(0, 240, 255, 0.4); color: #00f0ff;">
+                  <span>Run Live Demo Simulation</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
           <!-- Futuristic HUD Corner Brackets & Crosshairs -->
           <div class="hud-corner-brackets">
             <span class="bracket-tl"></span>

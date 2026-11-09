@@ -796,6 +796,11 @@ html, body {
   object-fit: cover;
   transform: scaleX(-1);
   display: none;
+  transition: filter 0.35s ease;
+}
+
+#client-webcam-video.night-vision-enhanced {
+  filter: brightness(1.75) contrast(1.28) saturate(1.15) drop-shadow(0 0 16px rgba(0, 240, 255, 0.25));
 }
 
 #client-webcam-canvas {

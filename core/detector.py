@@ -158,9 +158,13 @@ class FaceLandmarkDetector:
         if rescue:
             gamma = 0.35
             clahe_engine = self._rescue_clahe or self._night_clahe
+        elif self.night_mode == "on":
+            # Force high-gain shadow-lift and illumination boost when user explicitly activates Night Vision
+            gamma = 0.45
+            clahe_engine = self._night_clahe
         else:
             ratio = max(0.0, min(1.0, mean_lum / NIGHT_LUMINANCE_THRESHOLD))
-            gamma = 0.40 + 0.45 * ratio  # ~0.40 at pitch dark, ~0.85 near threshold
+            gamma = 0.40 + 0.35 * ratio  # ~0.40 at pitch dark, ~0.75 near threshold
             clahe_engine = self._night_clahe
 
         lut = self._get_gamma_lut(gamma)
@@ -299,32 +303,38 @@ class FaceLandmarkDetector:
         self.is_night_mode_active = should_activate_night
         detection_result = None
 
+        if should_activate_night:
+            enhanced_bgr = self._enhance_night_frame(bgr_frame, mean_lum, rescue=False)
+            self.enhanced_frame = enhanced_bgr
+        else:
+            self.enhanced_frame = bgr_frame
+
         # Pass 1: Natural RGB (MediaPipe was trained on natural RGB)
         if not should_activate_night:
             rgb_nat = cv2.cvtColor(bgr_frame, cv2.COLOR_BGR2RGB)
             mp_nat = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_nat)
             detection_result = self.detector.detect(mp_nat)
-            self.enhanced_frame = bgr_frame
 
         # Pass 2: Adaptive Night / Contrast Enhancement Pass (if night mode or if natural pass missed)
         if detection_result is None or not detection_result.face_landmarks or len(detection_result.face_landmarks) == 0:
-            enhanced_bgr = self._enhance_night_frame(bgr_frame, mean_lum, rescue=False)
+            if not should_activate_night:
+                enhanced_bgr = self._enhance_night_frame(bgr_frame, mean_lum, rescue=False)
+                self.enhanced_frame = enhanced_bgr
             rgb_enh = cv2.cvtColor(enhanced_bgr, cv2.COLOR_BGR2RGB)
             mp_enh = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_enh)
             detection_result = self.detector.detect(mp_enh)
             if detection_result.face_landmarks and len(detection_result.face_landmarks) > 0:
-                self.enhanced_frame = enhanced_bgr
                 self.is_night_mode_active = True
 
         # Pass 3: Extreme Rescue Pass for pitch-black cabins
         if not detection_result.face_landmarks or len(detection_result.face_landmarks) == 0:
             if should_activate_night or mean_lum < 95.0:
                 rescue_bgr = self._enhance_night_frame(bgr_frame, mean_lum, rescue=True)
+                self.enhanced_frame = rescue_bgr
                 rgb_res = cv2.cvtColor(rescue_bgr, cv2.COLOR_BGR2RGB)
                 mp_res = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_res)
                 detection_result = self.detector.detect(mp_res)
                 if detection_result.face_landmarks and len(detection_result.face_landmarks) > 0:
-                    self.enhanced_frame = rescue_bgr
                     self.is_night_mode_active = True
 
         # If all passes missed, reset smoothed landmarks so old state doesn't ghost
